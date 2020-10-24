@@ -2,25 +2,156 @@ import React from 'react';
 import logo from './logo.svg';
 import './App.css';
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
+const useGameState = timeLimit => {
+    const [stars, setStars] = React.useState(utils.random(1, 9));
+    const [availableNums, setAvailableNums] = React.useState(utils.range(1, 9));
+    const [candidateNums, setCandidateNums] = React.useState([]);
+    const [secondsLeft, setSecondsLeft] = React.useState(10);
+
+    React.useEffect(() => {
+        if (secondsLeft > 0 && availableNums.length > 0) {
+            const timerId = setTimeout(() => setSecondsLeft(secondsLeft - 1), 1000);
+            return () => clearTimeout(timerId);
+        }
+    });
+
+    const setGameState = (newCandidateNums) => {
+        if (utils.sum(newCandidateNums) !== stars) {
+            setCandidateNums(newCandidateNums);
+        } else {
+            const newAvailableNums = availableNums.filter(
+                n => !newCandidateNums.includes(n)
+            );
+            setStars(utils.randomSumIn(newAvailableNums, 9));
+            setAvailableNums(newAvailableNums);
+            setCandidateNums([]);
+        }
+    };
+
+    return {stars, availableNums, candidateNums, secondsLeft, setGameState};
+
+};
+
+const StarsDisplay = props => (
+    <>
+        {utils.range(1, props.count).map(starId => (<div key={starId} className='star'/>))}
+    </>
+);
+
+const PlayNumber = props => (
+    <button
+        className='number'
+        style={{backgroundColor: colors[props.status]}}
+        onClick={() => props.onClick(props.number, props.status)}
+    >{props.number}</button>
+);
+
+const PlayAgain = props => (
+
+    <div>
+        <div className='message'
+             style={{color: props.gameStatus === 'lost' ? 'red' : 'green'}}
         >
-          Learn React
-        </a>
-      </header>
+            {props.gameStatus === 'lost' ? 'Game Over' : 'Nice!'}
+        </div>
+        <button onClick={props.onClick}>Play Again?</button>
     </div>
-  );
-}
+);
+
+const Game = (props) => {
+
+    const {stars, availableNums, candidateNums, secondsLeft, setGameState,} = useGameState();
+
+    const candidatesAreWrong = utils.sum(candidateNums) > stars;
+
+    const gameStatus = availableNums.length === 0 ? 'won' :
+        secondsLeft === 0 ? 'lost' : 'active';
+
+    const numberStatus = number => {
+        if (!availableNums.includes(number)) {
+            return 'used';
+        }
+        if (candidateNums.includes(number)) {
+            return candidatesAreWrong ? 'wrong' : 'candidate';
+        }
+        return 'available';
+    };
+
+    const onNumberClick = (number, currentStatus) => {
+        if (currentStatus === 'used' || secondsLeft === 0) {
+            return;
+        }
+        const newCandidateNums =
+            currentStatus === 'available' ?
+                candidateNums.concat(number) :
+                candidateNums.filter(cn => cn !== number);
+        setGameState(newCandidateNums);
+
+    };
+
+    return (
+        <div className='game'>
+            <div className='help'>
+                Pick 1 or more numbers that add up to the number of circles.
+            </div>
+            <div className='body'>
+                <div className='left'>
+                    {gameStatus !== 'active' ? (
+                        <PlayAgain onClick={props.startNewGame} gameStatus = {gameStatus}/>
+                    ) : (
+                        <StarsDisplay count = {stars}/>
+                    )}
+                </div>
+                <div className='right'>
+                    {utils.range(1, 9).map(number => (
+                        <PlayNumber
+                            key={number}
+                            status={numberStatus(number)}
+                            number={number}
+                            onClick={onNumberClick}
+                        />
+                    ))}
+                </div>
+                <div className="timer">Time remaining: {secondsLeft}</div> 
+            </div>
+        </div>
+    );
+};
+
+const colors = {
+    available: 'lightgray',
+    used: 'lightgreen',
+    wrong: 'lightcoral',
+    candidate: 'deepskyblue'
+};
+
+const utils = {
+    sum: arr => arr.reduce((acc, curr) => acc + curr, 0),
+
+    random: (min, max) => min + Math.floor(Math.random() * (max - min + 1)),
+
+    range: (min, max) => Array.from({length: max - min + 1}, (_, i) => min + i),
+
+    randomSumIn: (arr, max) => {
+        const sets = [[]];
+        const sums = [];
+        for (let i = 0; i < arr.length; i++) {
+            for (let j = 0, len = sets.length; j < len; j++) {
+                const candidateSet = sets[j].concat(arr[i]);
+                const candidateSum = utils.sum(candidateSet);
+                if (candidateSum <= max) {
+                    sets.push(candidateSet);
+                    sums.push(candidateSum);
+                }
+            }
+        }
+        return sums[utils.random(0, sums.length - 1)];
+    },
+};
+
+const App = () => {
+    const [gameId, setGameId] = React.useState(1);
+    return <Game key={gameId} startNewGame={() => setGameId(gameId + 1)}/>;
+};
 
 export default App;
